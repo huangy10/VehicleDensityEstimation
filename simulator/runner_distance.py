@@ -4,6 +4,7 @@ import Queue
 import sys
 import os
 import getopt
+import random
 
 import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF
@@ -67,7 +68,7 @@ def lmda_estimator(road_index=0, sample_pos=500, sample_range=20, r=100):
     return result[0][0]
 
 
-def d_estimator(lmda, data, thresholds, r=100):
+def d_estimator(lmda, data, thresholds, r=100, loss_rate=0):
     """ 这个函数在已知λ的情况下，实现对参数D的估计，从而可以得到平均车距
 
      :param lmda    已经得到的λ估计值
@@ -77,8 +78,10 @@ def d_estimator(lmda, data, thresholds, r=100):
 
      :return        针对各个量化门限给出的估计值
     """
-    data = filter(lambda x: x < r, data)
+    data = filter(lambda x: (x < r and random.random() >= loss_rate), data)
     num = len(data)
+    if num == 0:
+        return -1
 
     def estimator(tau):
         l0 = len(filter(lambda x: x < tau, data))
@@ -99,7 +102,7 @@ def d_estimator(lmda, data, thresholds, r=100):
 
 class Worker(threading.Thread):
 
-    def __init__(self, R, lmda, road, manager, thresholds, method_name='distance_based_m'):
+    def __init__(self, R, lmda, road, manager, thresholds, method_name='distance_based_m', loss_rate=[]):
         """
          :param R       雷达的探测距离
          :param lmda    已经估计得到的λ值
@@ -115,6 +118,7 @@ class Worker(threading.Thread):
         self.road = road
         self.thresholds = thresholds
         self.method_name = method_name
+        self.loss_rate = loss_rate
 
     def start(self):
         print "====>Worker %s starts" % self.name
@@ -134,8 +138,10 @@ class Worker(threading.Thread):
         if len(data) == 0:
             return
 
-        def estimate_single_lane(data_single_lane, thresholds):
-            d = d_estimator(self.lmda, data_single_lane, thresholds, r=self.R)
+        def estimate_single_lane(data_single_lane, thresholds, loss_rate):
+            d = d_estimator(self.lmda, data_single_lane, thresholds, r=self.R, loss_rate=loss_rate)
+            if d == -1:
+                return 0
             try:
                 return map(lambda x: 1 / (x + 2/self.lmda), d)
             except TypeError:
@@ -156,15 +162,15 @@ class Worker(threading.Thread):
                 if record.lane_pos <= lane_num:
                     place_holder[record.lane_pos - 1].append(record)
             return place_holder
+
         cur_frame = data[0].frame_id
         data = data_re_organizer(data)          # 数据重整
         for (lane_pos, a) in enumerate(data):
             if len(a) == 0:
                 continue
             spacing_data = map(lambda x: x.spacing_m, a)
-            estimated_values = estimate_single_lane(spacing_data, self.thresholds)
-
-            try:
+            for l in self.loss_rate:
+                estimated_values = estimate_single_lane(spacing_data, self.thresholds, loss_rate=l)
                 for (estimated_value, threshold) in zip(estimated_values, self.thresholds):
                     SimulationRecord.objects.create(
                         road=self.road,
@@ -174,19 +180,9 @@ class Worker(threading.Thread):
                         real_value=len(a)/self.road.road_length_m,
                         estimation_method=self.method_name,
                         z=self.R,
+                        loss_rate=l,
                         extra_params='threshold:%s' % threshold
                     )
-            except TypeError:
-                SimulationRecord.objects.create(
-                    road=self.road,
-                    frame_id=cur_frame,
-                    lane_pos=lane_pos,
-                    estimate_value=estimated_values,
-                    real_value=len(a)/self.road.road_length_m,
-                    estimation_method=self.method_name,
-                    z=self.R,
-                    extra_params='threshold:%s' % self.thresholds
-                )
 
 
 class Manager(ProbeManager):
@@ -217,13 +213,14 @@ class Manager(ProbeManager):
     def create_workers(self, **kwargs):
         for i in range(self.worker_num):
             worker = Worker(R=self.R, lmda=self.lmda, road=Road.objects.all()[self.road_index],
-                            manager=self, thresholds=self.thresholds)
+                            manager=self, thresholds=self.thresholds, loss_rate=self.loss_rate,
+                            method_name=self.method_name)
             worker.name = str(i)
             self.workers.append(worker)
 
 
 def parse_command_line_params():
-    opt, args = getopt.getopt(sys.argv[1:], "w:r:f:m:t:i:")
+    opt, args = getopt.getopt(sys.argv[1:], "w:r:f:m:t:i:l:")
     raw_param = dict()
     for op, value in opt:
         raw_param[op] = value
@@ -237,9 +234,29 @@ def parse_command_line_params():
             else:
                 param['thresholds'] = range(z_params[0], z_params[1], z_params[2])
         else:
-            param['thresholds'] = int(raw_param['-t'])
+            param['thresholds'] = [int(raw_param['-t']), ]
     else:
-        param['thresholds'] = 30
+        param['thresholds'] = [30, ]
+
+    def float_range(a, b, step=0.1):
+        result = []
+        while a < b:
+            result.append(a)
+            a += step
+        return result
+
+    if '-l' in raw_param:
+        l_str = raw_param['-l']
+        if ':' in l_str:
+            l_params = map(lambda x: float(x), l_str.split(':'))
+            if len(l_params) == 2:
+                param['loss_rate'] = float_range(l_params[0], l_params[1])
+            else:
+                param['loss_rate'] = float_range(l_params[0], l_params[1], l_params[2])
+        else:
+            param['loss_rate'] = [float(raw_param['-l']), ]
+    else:
+        param['loss_rate'] = [0, ]
 
     param['worker_num'] = int(raw_param.get('-w', 5))
     param['frame_per_fetch'] = int(raw_param.get('-f', 500))

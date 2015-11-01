@@ -5,6 +5,7 @@ import time
 import sys
 import getopt
 import os
+import random
 
 from django.core.wsgi import get_wsgi_application
 
@@ -55,8 +56,7 @@ class DataLoader(threading.Thread):
             print '====>DataLoader %s visiting database' % self.name
             records = Record.objects.filter(road=self.road, processed=False,
                                             frame_id__in=range(cur_frame, cur_frame + frames_to_fetch)) \
-                .order_by('frame_id', 'local_y_m') \
-                .order_by('frame_id', 'local_y')
+                .order_by('frame_id', 'local_y_m')
 
             print '====>DataLoader %s fetched %s frames' % (self.name, frames_to_fetch)
             if frames_to_fetch > 0:
@@ -69,9 +69,11 @@ class DataLoader(threading.Thread):
 
 class Manager(threading.Thread):
 
-    def __init__(self, worker_num=3, z=None, frame_per_fetch=5000, frame_skip=1000, method_name='method_name', *args, **kwargs):
+    def __init__(self, worker_num=3, z=None, frame_per_fetch=5000, frame_skip=1000, method_name='method_name',
+                 loss_rate=None, **kwargs):
         super(Manager, self).__init__()
         self.worker_num = worker_num
+        self.loss_rate = loss_rate
         self.workers = []
         self.z = z
         self.road = Road.objects.all()[0]
@@ -84,7 +86,8 @@ class Manager(threading.Thread):
 
     def create_workers(self):
         for i in range(self.worker_num):
-            worker = Worker(road=self.road, z=self.z, method_name=self.method_name, manager=self)
+            worker = Worker(road=self.road, z=self.z, method_name=self.method_name, manager=self,
+                            loss_rate=self.loss_rate)
             worker.name = str(i)
             self.workers.append(worker)
 
@@ -139,7 +142,7 @@ class Reporter(threading.Thread):
 
 class Worker(threading.Thread):
 
-    def __init__(self, z, road=None, method_name='probe_based_m', manager=None):
+    def __init__(self, z=[], road=None, method_name='probe_based_m', manager=None, loss_rate=[]):
         super(Worker, self).__init__()
         self.manager = manager
         self.working_queue = Queue.Queue()
@@ -151,6 +154,7 @@ class Worker(threading.Thread):
             self.z = float(z)
         self.road = road
         self.method_name = method_name
+        self.loss_rate=loss_rate
 
     def start(self):
         print '====>Worker %s starts' % self.name
@@ -171,15 +175,16 @@ class Worker(threading.Thread):
         # cur_frame = data[0].frame_id
         # print '====>Worker %s 开始处理第%s帧的数据, 数据包的长度为%s' % (self.name, cur_frame, len(data))
 
-        def estimate_single_lane(data_single_lane, z):
+        def estimate_single_lane(data_single_lane, z, loss_rate):
             if len(data_single_lane) < 2:
                 return -1
             probe = data_single_lane[0]
-            probe_pos = probe.local_y
+            probe_pos = probe.local_y_m
             k = 0
             for record in data_single_lane:
-                if 0 < record.local_y - probe_pos <= z:
-                    k += 1
+                if 0 < record.local_y_m - probe_pos <= z:
+                    if random.random() >= loss_rate:
+                        k += 1
             return k / z
 
         def data_re_organizer(raw_data, lane_num=4):
@@ -192,35 +197,33 @@ class Worker(threading.Thread):
             return place_holder
 
         data = data_re_organizer(data)
-        if isinstance(self.z, float):
-            for (lane_pos, a) in enumerate(data):
-                estimated_value = estimate_single_lane(a, self.z)
-                if estimated_value >= 0:
-                    SimulationRecord.objects.create(road=self.road,
-                                                    frame_id=a[0].frame_id,
-                                                    lane_pos=lane_pos+1,
-                                                    estimate_value=estimated_value,
-                                                    real_value=len(a)/self.road.road_length_m,
-                                                    estimation_method=self.method_name,
-                                                    z=self.z)
-        else:
-            for (lane_pos, a) in enumerate(data):
-                for z in self.z:
-                    estimated_value = estimate_single_lane(a, z)
-                    if estimated_value >= 0:
-                        SimulationRecord.objects.create(road=self.road,
-                                                        frame_id=a[0].frame_id,
-                                                        lane_pos=lane_pos+1,
-                                                        estimate_value=estimated_value,
-                                                        real_value=len(a)/self.road.road_length_m,
-                                                        estimation_method=self.method_name,
-                                                        z=z)
 
-        # print '====>Worker %s 完成处理第%s帧的数据' % (self.name, cur_frame)
+        for (lane_pos, a) in enumerate(data):
+            for z in self.z:
+                for l in self.loss_rate:
+                    estimated_value = estimate_single_lane(a, z, l)
+                    if estimated_value >= 0:
+                        SimulationRecord.objects.create(
+                            road=self.road,
+                            frame_id=a[0].frame_id,
+                            lane_pos=lane_pos+1,
+                            estimate_value=estimated_value,
+                            real_value=len(a)/self.road.road_length_m,
+                            estimation_method=self.method_name,
+                            loss_rate=l,
+                            z=z
+                        )
 
 
 def parse_command_line_params():
-    opt, args = getopt.getopt(sys.argv[1:], "w:z:f:m:")
+    """ 这个函数从命令行参数中解析出仿真参数
+     -w: worker的数量
+     -z: 仿真的z参数
+     -f: DataLoader每次从数据库中取出的帧数
+     -m: 方法名称，注意以test开头的名称的仿真产生的结构数据会在仿真完成后删除
+     -l: loss rate，丢包率
+    """
+    opt, args = getopt.getopt(sys.argv[1:], "w:z:f:m:l:")
     raw_param = dict()
     for op, value in opt:
         raw_param[op] = value
@@ -235,9 +238,29 @@ def parse_command_line_params():
             else:
                 param['z'] = range(z_params[0], z_params[1], z_params[2])
         else:
-            param['z'] = int(raw_param['-z'])
+            param['z'] = [int(raw_param['-z']), ]
     else:
-        param['z'] = 1000
+        param['z'] = [100, ]
+
+    def float_range(a, b, step=0.1):
+        result = []
+        while a < b:
+            result.append(a)
+            a += step
+        return result
+
+    if '-l' in raw_param:
+        l_str = raw_param['-l']
+        if ':' in l_str:
+            l_params = map(lambda x: float(x), l_str.split(':'))
+            if len(l_params) == 2:
+                param['loss_rate'] = float_range(l_params[0], l_params[1])
+            else:
+                param['loss_rate'] = float_range(l_params[0], l_params[1], l_params[2])
+        else:
+            param['loss_rate'] = [float(raw_param['-l']), ]
+    else:
+        param['loss_rate'] = [0, ]
 
     param['worker_num'] = int(raw_param.get('-w', 5))
     param['frame_per_fetch'] = int(raw_param.get('-f', 500))

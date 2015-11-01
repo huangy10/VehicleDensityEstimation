@@ -12,6 +12,7 @@ class SimulationRecord(models.Model):
 
     estimation_method = models.CharField(max_length=50, verbose_name='估计方法的名称')
     z = models.FloatField(default=300, verbose_name='通信距离')
+    loss_rate = models.FloatField(default=0, verbose_name='丢包率')
     extra_params = models.CharField(max_length=255, verbose_name='额外参数信息', default='')
 
     created_at = models.DateTimeField(auto_now_add=True)
