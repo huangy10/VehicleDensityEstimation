@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="DataSourceManagerImpl" format="xml" hash="1538597598">
+  <component name="DataSourceManagerImpl" format="xml" hash="4175386434">
     <data-source source="LOCAL" name="PostgreSQL - vehicle_spacing_data@localhost" uuid="612ee43f-7b35-41ea-b149-a355a5e30405">
       <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.postgresql.Driver</jdbc-driver>
       <jdbc-url>jdbc:postgresql://localhost:5432/vehicle_spacing_data</jdbc-url>
-      <libraries />
     </data-source>
   </component>
 </project>
