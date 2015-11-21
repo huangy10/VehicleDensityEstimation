@@ -51,3 +51,14 @@ def main():
                 continue
             result[i, j] = np.linalg.inv(J)[0, 0]
     return result
+
+
+if __name__ == '__main__':
+    result = main()
+    tau_set = range(10, 40)
+    plot(tau_set, result[0], color='red', linestyle='-')
+    plot(tau_set, result[3], color='black', linestyle=':')
+    plot(tau_set, result[5], color='green', linestyle='--')
+    show()
+
+
