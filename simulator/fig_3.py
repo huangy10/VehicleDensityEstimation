@@ -1,11 +1,14 @@
 import numpy as np
 import math
 from matplotlib.pylab import *
+from scipy.io import savemat
 
 D = 9
 m = 25
 lmda = 0.1
 N = 2018
+# tau_set = range(30, 40)
+tau_set = np.linspace(29.001, 40, 1000)
 
 
 def F(x):
@@ -38,7 +41,7 @@ def P_F_dm(tau, P=1):
 def main():
     P_set = np.linspace(0.1, 0.9, 10)
 
-    tau1_set = np.arange(10, 40)
+    tau1_set = tau_set
     result = np.zeros(shape=(len(P_set), len(tau1_set)))
     for (i, P) in enumerate(P_set):
         for (j, tau1) in enumerate(tau1_set):
@@ -47,18 +50,23 @@ def main():
             phi2 = np.matrix([P_F_dD(tau2, P), P_F_dm(tau2, P)])
             J = N / (1-P_F_tau(tau1, P)) / P_F_tau(tau1, P) * phi1.transpose() * phi1 + \
                 N / (1-P_F_tau(tau2, P)) / P_F_tau(tau2, P) * phi2.transpose() * phi2
-            if np.linalg.det(J) <= 1e-5:
-                continue
+            # if np.linalg.det(J) <= 1e-5:
+            #    continue
             result[i, j] = np.linalg.inv(J)[0, 0]
     return result
 
 
 if __name__ == '__main__':
     result = main()
-    tau_set = range(10, 40)
+
     plot(tau_set, result[0], color='red', linestyle='-')
     plot(tau_set, result[3], color='black', linestyle=':')
     plot(tau_set, result[5], color='green', linestyle='--')
+    savemat('./data/fig3_data.mat', {
+        'tau_set': tau_set,
+        'result': result,
+        'P': np.linspace(0.1, 0.9, 10)
+    }, appendmat=False)
     show()
 
 

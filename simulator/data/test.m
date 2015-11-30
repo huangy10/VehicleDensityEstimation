@@ -2,7 +2,6 @@ clear;
 close all;
 clc;
 
-load 'data.mat';
-plot(distance_loss_set, distance_rel_err);
-hold on;
-plot(probe_loss_set, probe_rel_err);
+tau1 = linspace(30, 50, 100);
+
+P = linspace(0.1, 0.9, 10);
