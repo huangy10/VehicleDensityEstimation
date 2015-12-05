@@ -8,7 +8,7 @@ D = 9
 N = 2018
 lmda_set = [0.07, 0.10, 0.13]
 # tau_set = range(10, 50)
-tau_set = np.linspace(10, 40, 1000)
+tau_set = np.linspace(9.01, 40, 1000)
 
 
 def F(x, lmda=0.1):
