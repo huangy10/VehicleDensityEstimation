@@ -14,9 +14,6 @@ from django.core.wsgi import get_wsgi_application
 from django.core.exceptions import ValidationError
 
 
-from django.core.wsgi import get_wsgi_application
-
-
 sys.path.extend(['/Users/Lena/Project/Python/DataScience/VehicleDensityEstimation', ])
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "VehicleDensityEstimation.settings")
 application = get_wsgi_application()
