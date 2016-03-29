@@ -16,7 +16,7 @@ from django.db.models import Avg
 COMMUNICATE_RANGE = 100.0
 
 
-def estimate(sampler, frame, road, lane_num):
+def estimate_with_loss(sampler, frame, road, lane_num, loss_rate = 0):
     records = Record.objects.filter(road=road, frame_id=frame)
     real_value = records.count() / road.road_length_m / lane_num
     sample_record = records.filter(vehicle=sampler).first()
@@ -24,7 +24,7 @@ def estimate(sampler, frame, road, lane_num):
         sampler, sample_record = switch_sampler(sampler, frame, road)
     response_count = 0
     for record in records:
-        if 0 < sample_record.local_y_m - record.local_y_m < COMMUNICATE_RANGE:
+        if 0 < sample_record.local_y_m - record.local_y_m < COMMUNICATE_RANGE and random.random() > loss_rate:
             response_count += 1
     estimated_value = (response_count + 1) / (lane_num * COMMUNICATE_RANGE)
     SimulationRecord.objects.create(
@@ -38,6 +38,13 @@ def estimate(sampler, frame, road, lane_num):
         estimation_method="mobsampling"
     )
     return sampler
+
+
+def estimate(sampler, frame, road, lane_num):
+    a = None
+    for loss in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+        a = estimate_with_loss(sampler, frame, road, lane_num, loss)
+    return a
 
 
 def switch_sampler(sampler, frame, road):

@@ -13,8 +13,7 @@ from VehicleDataORM.models import Road, Record, Vehicle
 from simulator.models import SimulationRecord
 
 
-def mean_absolute_error(method_name=""):
-    data = SimulationRecord.objects.filter(estimation_method=method_name)
+def mean_absolute_error(data):
     if not data.exists():
         print "没有找到仿真数据"
         return
@@ -26,8 +25,7 @@ def mean_absolute_error(method_name=""):
     return reduce(absolute_error, data, 0) / len(data)
 
 
-def mean_relative_error(method_name=""):
-    data = SimulationRecord.objects.filter(estimation_method=method_name)
+def mean_relative_error(data):
     if not data.exists():
         print "没有找到仿真数据"
         return
