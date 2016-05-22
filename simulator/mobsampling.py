@@ -12,13 +12,14 @@ from VehicleDataORM.models import Road, Record, Vehicle
 from simulator.models import SimulationRecord
 from django.db.models import Avg
 
-
 COMMUNICATE_RANGE = 100.0
 
 
 def estimate_with_loss(sampler, frame, road, lane_num, loss_rate = 0):
     records = Record.objects.filter(road=road, frame_id=frame)
     real_value = records.count() / road.road_length_m / lane_num
+    if real_value == 0:
+        return sampler
     sample_record = records.filter(vehicle=sampler).first()
     if sample_record is None:
         sampler, sample_record = switch_sampler(sampler, frame, road)
@@ -34,7 +35,7 @@ def estimate_with_loss(sampler, frame, road, lane_num, loss_rate = 0):
         estimate_value=estimated_value,
         real_value=real_value,
         z=0,
-        loss_rate=0,
+        loss_rate=loss_rate,
         estimation_method="mobsampling"
     )
     return sampler
@@ -42,7 +43,7 @@ def estimate_with_loss(sampler, frame, road, lane_num, loss_rate = 0):
 
 def estimate(sampler, frame, road, lane_num):
     a = None
-    for loss in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+    for loss in [0, 0.05, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]:
         a = estimate_with_loss(sampler, frame, road, lane_num, loss)
     return a
 

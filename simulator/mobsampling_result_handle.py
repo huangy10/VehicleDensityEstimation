@@ -24,17 +24,24 @@ def mean_absolute_error(data):
 
     return reduce(absolute_error, data, 0) / len(data)
 
-
+skips = 0
 def mean_relative_error(data):
+    skips = 0
     if not data.exists():
         print "没有找到仿真数据"
         return
+
     data = map(lambda x: (x.real_value, x.estimate_value), list(data))
 
     def mean_error(a, b):
+        global skips
+        err = np.abs(b[0] - b[1]) / b[0]
+        if err > 1:
+            skips += 1
+            return a
         return a + np.abs(b[0] - b[1]) / b[0]
 
-    return reduce(mean_error, data, 0) / len(data)
+    return reduce(mean_error, data, 0) / (len(data) - skips)
 
 
 def main():

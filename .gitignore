@@ -59,3 +59,9 @@ docs/_build/
 target/
 
 # Created by .ignore support plugin (hsz.mobi)
+
+record.json
+result.json
+data.json
+db.sqlite3
+erl_crash.dump

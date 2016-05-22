@@ -55,11 +55,12 @@ class DataLoader(threading.Thread):
             frames_to_fetch = min(self.frame_num_per_fetch, self.max_frame_id - cur_frame)
             print '====>DataLoader %s visiting database' % self.name
             records = Record.objects.filter(road=self.road, processed=False,
-                                            frame_id__in=range(cur_frame, cur_frame + frames_to_fetch)) \
+                                            frame_id__in=range(cur_frame, cur_frame + frames_to_fetch),
+                                            spacing_m__gt=1) \
                 .order_by('frame_id', 'local_y_m')
 
             print '====>DataLoader %s fetched %s frames' % (self.name, frames_to_fetch)
-            if frames_to_fetch > 0:
+            if frames_to_fetch > 0 and records.count() > 0:
                 data_queue.put(list(records))
             cur_frame += frames_to_fetch
 

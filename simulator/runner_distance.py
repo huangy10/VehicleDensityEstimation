@@ -13,7 +13,6 @@ from scipy.optimize import curve_fit, fsolve
 from django.core.wsgi import get_wsgi_application
 from django.core.exceptions import ValidationError
 
-
 sys.path.extend(['/Users/Lena/Project/Python/DataScience/VehicleDensityEstimation', ])
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "VehicleDensityEstimation.settings")
 application = get_wsgi_application()
@@ -76,8 +75,9 @@ def d_estimator(lmda, data, thresholds, r=100, loss_rate=0):
      :return        针对各个量化门限给出的估计值
     """
     data = filter(lambda x: (x < r and random.random() >= loss_rate), data)
+    data = filter(lambda x: x > 0, data)
     num = len(data)
-    if num == 0:
+    if num <= 0:
         return -1
 
     def estimator(tau):
@@ -162,6 +162,8 @@ class Worker(threading.Thread):
 
         cur_frame = data[0].frame_id
         data = data_re_organizer(data)          # 数据重整
+        if cur_frame == 9466:
+            print data[2]
         for (lane_pos, a) in enumerate(data):
             if len(a) == 0:
                 continue
@@ -169,10 +171,12 @@ class Worker(threading.Thread):
             for l in self.loss_rate:
                 estimated_values = estimate_single_lane(spacing_data, self.thresholds, loss_rate=l)
                 for (estimated_value, threshold) in zip(estimated_values, self.thresholds):
+                    if estimated_value == 0:
+                        continue
                     SimulationRecord.objects.create(
                         road=self.road,
                         frame_id=cur_frame,
-                        lane_pos=lane_pos,
+                        lane_pos=lane_pos+1,
                         estimate_value=estimated_value,
                         real_value=len(a)/self.road.road_length_m,
                         estimation_method=self.method_name,
@@ -221,6 +225,7 @@ def parse_command_line_params():
     raw_param = dict()
     for op, value in opt:
         raw_param[op] = value
+    print raw_param
     param = dict()
     if '-t' in raw_param:
         z_str = raw_param['-t']
@@ -260,6 +265,7 @@ def parse_command_line_params():
     param['R'] = int(raw_param.get('-r', 100))
     param['method_name'] = raw_param.get('-m', 'test')
     param['road_index'] = int(raw_param.get('-r', 0))
+    print param
     return param
 
 
