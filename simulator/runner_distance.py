@@ -86,6 +86,8 @@ def d_estimator(lmda, data, thresholds, r=100, loss_rate=0):
         def F(d):
             """ 待求解的方程的表达式
             """
+            if d >= tau:
+                return 0
             return 1 - lmda * (tau - d + 1/lmda) * np.exp(-lmda * (tau - d)) - l0/float(num)
 
         result = fsolve(F, 0)

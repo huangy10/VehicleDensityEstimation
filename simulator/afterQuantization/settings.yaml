@@ -1,11 +1,11 @@
 threshold:
-  - 20
+  - 15
   - 25
-  - 30
+  - 40
 attack:
-  - 1
-  - 1
+  - 0.9
+  - 0.1
 normal_percentage:
-  1
+  0.8
 lmda:
   0.1386

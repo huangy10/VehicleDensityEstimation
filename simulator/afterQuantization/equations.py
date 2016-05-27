@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("TkAgg")
 from matplotlib import pylab
-from .config import GlobalConfigure
+from simulator.afterQuantization.config import GlobalConfigure
 
 
 def equation_to_solve(tau, b, phi_0, phi_1, d):
@@ -13,17 +13,22 @@ def p_after_attack(x, phi_0, phi_1, d):
     config = GlobalConfigure()
     p_normal = config.get_normal_percentages()
     pmf = p_before_attack(x, d, config.get_lmda())
-    return (p_normal + (1 - p_normal) * phi_0) * pmf + (p_normal * (1 - p_normal) * (1-phi_1)) * (1 - pmf)
+    return (p_normal + (1 - p_normal) * phi_0) * pmf + ((1 - p_normal) * (1-phi_1)) * (1 - pmf)
 
 
 def p_before_attack(x, d, lmda):
-    diff = np.array([x - d, np.zeros(len(x))]).max(axis=0)
-    return 1 - lmda * (diff - 1 / lmda) * np.exp(-lmda * diff)
-
+    result = 1 - lmda * ((x-d) + 1 / lmda) * np.exp(-lmda * (x-d))
+    result *= (x-d) > 0
+    return result
 
 
 def main():
-    pass
+    x = np.arange(0, 100, 0.1)
+    y = p_before_attack(x,  10, GlobalConfigure().get_lmda())
+    z = p_after_attack(x, 0.9, 0.9, 10)
+    pylab.plot(x, y)
+    pylab.plot(x, z)
+    pylab.show()
 
 
 if __name__ == '__main__':
