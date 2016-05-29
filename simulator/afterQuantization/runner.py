@@ -121,12 +121,12 @@ def main():
 
     def equation(input_param):
         phi_0_to_estimate, phi_1_to_estimate, d = input_param
-        # diff = map(lambda x: equation_to_solve(x, percent, phi_0_to_estimate, phi_1_to_estimate, d), threshold)
+        # phi_0_to_estimate, d = input_param
         diff = equation_to_solve(threshold, percent, phi_0_to_estimate, phi_1_to_estimate, d)
-        print diff, input_param
+        # print diff, input_param
         return diff
 
-    print fsolve(equation, [1, 1, 10])
+    print fsolve(equation, [1, 0, 10])
 
 
 def draw_3d_image():

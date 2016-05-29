@@ -23,11 +23,15 @@ def p_before_attack(x, d, lmda):
 
 
 def main():
-    x = np.arange(0, 100, 0.1)
-    y = p_before_attack(x,  10, GlobalConfigure().get_lmda())
-    z = p_after_attack(x, 0.9, 0.9, 10)
-    pylab.plot(x, y)
-    pylab.plot(x, z)
+    # x = np.arange(0, 100, 0.1)
+    # y = p_before_attack(x,  10, GlobalConfigure().get_lmda())
+    # z = p_after_attack(x, 0.9, 0.9, 10)
+    # pylab.plot(x, y)
+    # pylab.plot(x, z)
+    # pylab.show()
+    xx = np.arange(0, 1, 0.001)
+    y = map(lambda x : p_after_attack(30, x, 1, 3.18), xx)
+    pylab.plot(xx, y)
     pylab.show()
 
 
