@@ -108,8 +108,12 @@ def distance_based_d_estimator(data, threshold):
     return result[0]
 
 
+def real_spacing(data):
+    return sum(data) / float(len(data))
+
+
 def main():
-    data = load_data(range(5900, 6000, 1))
+    data = load_data(range(4500, 4600, 1))
     print len(data)
     GlobalConfigure().lmda = lmda_estimator(data)
     threshold = config.get_threshold()
@@ -126,11 +130,10 @@ def main():
         # print diff, input_param
         return diff
 
-    print fsolve(equation, [1, 0, 10])
+    phi_0, phi_1, D = fsolve(equation, [1, 0, 10])
+    estimate_spacing = D + 2 / GlobalConfigure().get_lmda()
 
-
-def draw_3d_image():
-    pass
+    print estimate_spacing, real_spacing(data)
 
 
 if __name__ == "__main__":
