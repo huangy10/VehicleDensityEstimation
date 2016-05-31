@@ -4,6 +4,7 @@ import os
 import random
 import numpy as np
 from numpy.linalg import norm
+from scipy.io import savemat
 from statsmodels.distributions import ECDF
 
 from simulator.afterQuantization.config import GlobalConfigure
@@ -30,13 +31,15 @@ from simulator.models import SimulationRecord
 
 config = GlobalConfigure()
 
+base_path = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
+
 
 def load_data(frame_id):
     r = Road.objects.all().first()
     if isinstance(frame_id, list):
-        data = Record.objects.filter(lane_pos=1, frame_id__in=frame_id, road=r)
+        data = Record.objects.filter(frame_id__in=frame_id, road=r)
     else:
-        data = Record.objects.filter(lane_pos=1, frame_id=frame_id, road=r)
+        data = Record.objects.filter(frame_id=frame_id, road=r)
     return data.values_list("spacing_m", flat=True)
 
 
@@ -80,15 +83,15 @@ def lmda_estimator(data):
         return 1 - lmda * (x - D + 1 / lmda) * np.exp(-lmda * (x - D))
 
     result = curve_fit(F, data, y)
-    print """
-        ===================λ估计完成，结果如下===================
-            λ：%s
-            D: %s
-            Covariance matrix:
-                 | %s\t, %s |
-                 | %s\t, %s |
-        ======================================================
-        """ % (result[0][0], result[0][1], result[1][0][0], result[1][0][1], result[1][1][0], result[1][1][1])
+    # print """
+    #     ===================λ估计完成，结果如下===================
+    #         λ：%s
+    #         D: %s
+    #         Covariance matrix:
+    #              | %s\t, %s |
+    #              | %s\t, %s |
+    #     ======================================================
+    #     """ % (result[0][0], result[0][1], result[1][0][0], result[1][0][1], result[1][1][0], result[1][1][1])
 
     return result[0][0]
 
@@ -112,28 +115,101 @@ def real_spacing(data):
     return sum(data) / float(len(data))
 
 
-def main():
-    data = load_data(range(4500, 4600, 1))
-    print len(data)
-    GlobalConfigure().lmda = lmda_estimator(data)
+def estimator(frame_range, p_normal):
+    data = load_data(frame_range)
+    # estimate lmda value
+    lmda = lmda_estimator(data)
     threshold = config.get_threshold()
-    percent = map(lambda x: count_percentage(data, x, config.get_normal_percentages()), threshold)
-    print percent
-    print map(lambda x: count_percentage_attack_free(data, x), threshold)
-
-    print distance_based_d_estimator(data, threshold[1])
+    percent = map(lambda x: count_percentage(data, x, p_normal), threshold)
 
     def equation(input_param):
         phi_0_to_estimate, phi_1_to_estimate, d = input_param
         # phi_0_to_estimate, d = input_param
-        diff = equation_to_solve(threshold, percent, phi_0_to_estimate, phi_1_to_estimate, d)
+        diff = equation_to_solve(
+            threshold, percent,
+            phi_0_to_estimate, phi_1_to_estimate, d,
+            p_normal=p_normal,
+            lmda=lmda
+        )
         # print diff, input_param
         return diff
 
     phi_0, phi_1, D = fsolve(equation, [1, 0, 10])
-    estimate_spacing = D + 2 / GlobalConfigure().get_lmda()
+    estimate_spacing = D + 2 / lmda
+    real_space = real_spacing(data)
+    return (estimate_spacing - real_space) / real_space
 
-    print estimate_spacing, real_spacing(data)
+
+def estimator_with_data(data, lmda, p_normal):
+    threshold = config.get_threshold()
+    percent = map(lambda x: count_percentage(data, x, p_normal), threshold)
+
+    def equation(input_param):
+        phi_0_to_estimate, phi_1_to_estimate, d = input_param
+        # phi_0_to_estimate, d = input_param
+        diff = equation_to_solve(
+            threshold, percent,
+            phi_0_to_estimate, phi_1_to_estimate, d,
+            p_normal=p_normal,
+            lmda=lmda
+        )
+        # print diff, input_param
+        return diff
+
+    phi_0, phi_1, D = fsolve(equation, [1, 0, 10])
+    estimate_spacing = D + 2 / lmda
+    real_space = real_spacing(data)
+    return min(np.abs(estimate_spacing - real_space) / real_space, 1)
+
+
+def main():
+    savemat(os.path.join(base_path, "data/test.mat"), dict(a=1), appendmat=False)
+    p_normals = np.arange(0.5, 1, 0.01)
+    frame_start_range = range(0, 9000, 100)
+
+    lmda_index = dict()
+    for frame_start in frame_start_range:
+        lmda_index[frame_start] = lmda_estimator(load_data(range(frame_start, frame_start + 100)))
+
+    y = []
+    for p in p_normals:
+
+        y_temp = map(lambda a: estimator_with_data(load_data(range(frame_start, frame_start + 100)), lmda_index[a], p),
+                     frame_start_range)
+        y_temp = sum(y_temp) / float(len(y_temp))
+        y.append(y_temp)
+    #
+    # pylab.plot(p_normals, y)
+    # pylab.show()
+
+    # write simulation result to mat file
+    print "Writing to .mat file"
+    savemat(os.path.join(base_path, "data/after_quantization.mat"), dict(
+        p_normals=p_normals,
+        relative_error=y
+    ), appendmat=False)
+
+    # data = load_data(range(4500, 4600, 1))
+    # print len(data)
+    # GlobalConfigure().lmda = lmda_estimator(data)
+    # threshold = config.get_threshold()
+    # percent = map(lambda x: count_percentage(data, x, config.get_normal_percentages()), threshold)
+    # print percent
+    # print map(lambda x: count_percentage_attack_free(data, x), threshold)
+    #
+    # print distance_based_d_estimator(data, threshold[1])
+    #
+    # def equation(input_param):
+    #     phi_0_to_estimate, phi_1_to_estimate, d = input_param
+    #     # phi_0_to_estimate, d = input_param
+    #     diff = equation_to_solve(threshold, percent, phi_0_to_estimate, phi_1_to_estimate, d)
+    #     # print diff, input_param
+    #     return diff
+    #
+    # phi_0, phi_1, D = fsolve(equation, [1, 0, 10])
+    # estimate_spacing = D + 2 / GlobalConfigure().get_lmda()
+    # print phi_0, phi_1, D
+    # print estimate_spacing, real_spacing(data)
 
 
 if __name__ == "__main__":
