@@ -115,11 +115,10 @@ def real_spacing(data):
     return sum(data) / float(len(data))
 
 
-def estimator(frame_range, p_normal):
+def estimator(frame_range, p_normal, threshold):
     data = load_data(frame_range)
     # estimate lmda value
     lmda = lmda_estimator(data)
-    threshold = config.get_threshold()
     percent = map(lambda x: count_percentage(data, x, p_normal), threshold)
 
     def equation(input_param):
@@ -140,8 +139,7 @@ def estimator(frame_range, p_normal):
     return (estimate_spacing - real_space) / real_space
 
 
-def estimator_with_data(data, lmda, p_normal):
-    threshold = config.get_threshold()
+def estimator_with_data(data, lmda, p_normal, threshold):
     percent = map(lambda x: count_percentage(data, x, p_normal), threshold)
 
     def equation(input_param):
@@ -165,28 +163,41 @@ def estimator_with_data(data, lmda, p_normal):
 def main():
     savemat(os.path.join(base_path, "data/test.mat"), dict(a=1), appendmat=False)
     p_normals = np.arange(0.5, 1, 0.01)
-    frame_start_range = range(0, 9000, 100)
+    frame_start_range = range(5000, 6000, 100)
+    threshold = np.array([5, 15, 40])
 
     lmda_index = dict()
+    print "Setting up lambda cache"
     for frame_start in frame_start_range:
         lmda_index[frame_start] = lmda_estimator(load_data(range(frame_start, frame_start + 100)))
 
-    y = []
-    for p in p_normals:
+    result = []
+    for i in range(5):
+        y = []
+        for p in p_normals:
+            print p
+            y_temp = map(
+                lambda a: estimator_with_data(
+                    load_data(range(frame_start, frame_start + 100)),
+                    lmda_index[a],
+                    p,
+                    threshold+i),
+                frame_start_range
+            )
+            y_temp = sum(y_temp) / float(len(y_temp))
+            y.append(y_temp)
+        result.append(y)
 
-        y_temp = map(lambda a: estimator_with_data(load_data(range(frame_start, frame_start + 100)), lmda_index[a], p),
-                     frame_start_range)
-        y_temp = sum(y_temp) / float(len(y_temp))
-        y.append(y_temp)
-    #
-    # pylab.plot(p_normals, y)
+    # pylab.plot(p_normals, result[0])
+    # pylab.plot(p_normals, result[1])
+    # pylab.plot(p_normals, result[2])
+    # pylab.plot(p_normals, result[3])
     # pylab.show()
 
     # write simulation result to mat file
     print "Writing to .mat file"
-    savemat(os.path.join(base_path, "data/after_quantization.mat"), dict(
-        p_normals=p_normals,
-        relative_error=y
+    savemat(os.path.join(base_path, "data/after_quantization_group.mat"), dict(
+        relative_error=result
     ), appendmat=False)
 
     # data = load_data(range(4500, 4600, 1))

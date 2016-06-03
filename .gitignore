@@ -66,3 +66,4 @@ data.json
 db.sqlite3
 erl_crash.dump
 /simulator/data
+.idea
